@@ -2,7 +2,9 @@ from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from django.db.models import Count
+from django.db.models import Count, Q
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 
 from .models import (
     Category,
@@ -23,6 +25,30 @@ from .permissions import (
 )
 
 
+class GlobalSearchView(generics.ListAPIView):
+    serializer_class = PostSerializer
+    permission_classes = [IsAuthenticated]
+
+    @method_decorator(cache_page(60*5))  # Cache for 5 minutes
+    def get(self, request, *args, **kwargs):
+        return self.list(request, *args, **kwargs)
+
+    def get_queryset(self):
+        query = self.request.GET.get('q', '')
+        return Post.objects.filter(
+            Q(description__icontains=query) | Q(text__icontains=query)
+        ).annotate(comments_count=Count('post_comments')).order_by('-publication_date')
+
+
+class CategoryFilterView(generics.ListAPIView):
+    serializer_class = PostSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        category_id = self.kwargs.get('category_id')
+        return Post.objects.filter(category__id=category_id).annotate(comments_count=Count('post_comments')).order_by('-publication_date')
+
+
 class CategoryCreateView(generics.ListCreateAPIView):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
@@ -36,7 +62,7 @@ class PostCreateView(generics.CreateAPIView):
 
 
 class PostListView(generics.ListAPIView):
-    queryset = Post.objects.annotate(comments_count=Count('post_comments'))
+    queryset = Post.objects.annotate(comments_count=Count('post_comments')).order_by('-publication_date')
     serializer_class = PostSerializer
     permission_classes = [IsAuthenticated]
 

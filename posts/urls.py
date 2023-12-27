@@ -9,10 +9,14 @@ from .views import (
     PostRetrieveAPIView,
     CommentCreateAPIView,
     CommentUpdateAPIView,
-    CommentDeleteAPIView
+    CommentDeleteAPIView,
+    GlobalSearchView,
+    CategoryFilterView
 )
 
 urlpatterns = [
+    path('search/', GlobalSearchView.as_view(), name='global-search'),
+    path('category/<int:category_id>/', CategoryFilterView.as_view(), name='category-filter'),
     path('category/', CategoryCreateView.as_view(), name='create_category'),
     path('posts/', PostListView.as_view(), name='posts'),
     path('post-create/', PostCreateView.as_view(), name='post_create'),
