@@ -22,13 +22,16 @@ class Post(models.Model):
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
     comments = models.ManyToManyField("Comment", related_name='post_comments')
     publication_date = models.DateTimeField(default=timezone.now)
+    favorites = models.ManyToManyField(CustomUser, related_name='favorite_posts', blank=True)
 
     def __str__(self):
         return self.description
 
-    def annotate_comments_count(self):
-        comments_count = self.comments.aggregate(count=Count('id'))['count']
-        self.comments_count = comments_count
+    def save(self, *args, **kwargs):
+        self.total_comments = self.comments.count()
+        super().save(*args, **kwargs)
+
+
 
 
 class Comment(models.Model):
@@ -44,5 +47,5 @@ class Comment(models.Model):
 @receiver(post_save, sender=Comment)
 def update_post_comments_count(sender, instance, **kwargs):
     post = instance.post
-    post.comments_count = post.comments.count()
+    post.total_comments = post.comments.count()
     post.save()

@@ -1,7 +1,8 @@
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from django.db.models import Subquery, OuterRef
 from django.db.models import Count, Q
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
@@ -37,7 +38,7 @@ class GlobalSearchView(generics.ListAPIView):
         query = self.request.GET.get('q', '')
         return Post.objects.filter(
             Q(description__icontains=query) | Q(text__icontains=query)
-        ).annotate(comments_count=Count('post_comments')).order_by('-publication_date')
+        ).annotate(total_comments=Count('post_comments')).order_by('-publication_date')
 
 
 class CategoryFilterView(generics.ListAPIView):
@@ -45,8 +46,8 @@ class CategoryFilterView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        category_id = self.kwargs.get('category_id')
-        return Post.objects.filter(category__id=category_id).annotate(comments_count=Count('post_comments')).order_by('-publication_date')
+        category_name = self.kwargs.get('category_name')
+        return Post.objects.filter(category__name=category_name).annotate(comments_count=Count('post_comments')).order_by('-publication_date')
 
 
 class CategoryCreateView(generics.ListCreateAPIView):
@@ -102,7 +103,7 @@ class CommentCreateAPIView(generics.CreateAPIView):
     def perform_create(self, serializer):
         comment = serializer.save(author=self.request.user)
         post = comment.post
-        post.comments_count = post.comments.count()
+        post.comments.add(comment)
         post.save()
 
 
@@ -116,3 +117,52 @@ class CommentDeleteAPIView(generics.DestroyAPIView):
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticated, IsOwnerOrAdminPermission, IsCommentOwnerOrPostAuthorOrAdmin]
+
+
+class AddToFavoritesView(generics.UpdateAPIView):
+    queryset = Post.objects.all()
+    serializer_class = PostSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_field = 'pk'
+
+    def update(self, request, *args, **kwargs):
+        post = self.get_object()
+        user = self.request.user
+
+        if user in post.favorites.all():
+            return Response({"detail": "Post is already in favorites."}, status=status.HTTP_400_BAD_REQUEST)
+
+        post.favorites.add(user)
+        post.save()
+
+        serializer = self.get_serializer(post)
+        return Response(serializer.data)
+
+
+class RemoveFromFavoritesView(generics.UpdateAPIView):
+    queryset = Post.objects.all()
+    serializer_class = PostSerializer
+    permission_classes = [IsAuthenticated]
+    lookup_field = 'pk'
+
+    def update(self, request, *args, **kwargs):
+        post = self.get_object()
+        user = self.request.user
+
+        if user not in post.favorites.all():
+            return Response({"detail": "Post is not in favorites."}, status=status.HTTP_400_BAD_REQUEST)
+
+        post.favorites.remove(user)
+        post.save()
+
+        serializer = self.get_serializer(post)
+        return Response(serializer.data)
+
+
+class UserSavedPostsView(generics.ListAPIView):
+    serializer_class = PostSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        return user.favorite_posts.all()

@@ -61,3 +61,4 @@ class OTP(models.Model):
     def is_expired(self):
         time_threshold = timezone.now() - timezone.timedelta(minutes=5)
         return self.created_at < time_threshold
+

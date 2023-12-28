@@ -42,18 +42,24 @@ class CommentCreateSerializer(serializers.ModelSerializer):
 class PostSerializer(serializers.ModelSerializer):
     author = CustomUserSerializer()
     category = CategorySerializer()
-    comments_count = serializers.IntegerField()
     publication_date = serializers.SerializerMethodField()
+    is_favorite = serializers.SerializerMethodField()
+    comments_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
-        fields = ('id', 'description', 'text', 'photo', 'author', 'category', 'publication_date', 'comments_count')
+        fields = ('id', 'description', 'text', 'photo', 'author',
+                  'category', 'publication_date', 'comments_count', 'is_favorite')
 
     def get_comments_count(self, obj):
-        return obj.comments_count
+        return obj.comments.count()
 
     def get_publication_date(self, obj):
         return format_localized_datetime(obj.publication_date)
+
+    def get_is_favorite(self, obj):
+        user = self.context['request'].user
+        return user in obj.favorites.all()
 
 
 class PostDetailSerializer(serializers.ModelSerializer):
